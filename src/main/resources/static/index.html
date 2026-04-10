@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Personal Notes</title>
+  <style>
+    body         { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    h1           { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    .phase-badge { display: inline-block; background: #f0ad4e; color: #fff; font-size: 0.7rem;
+                   padding: 2px 8px; border-radius: 3px; vertical-align: middle; margin-left: 8px; }
+    label        { display: block; margin-bottom: 0.25rem; font-weight: 500; font-size: 0.9rem; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: 0.5rem;
+                      margin-bottom: 0.5rem; border: 1px solid #ccc; border-radius: 4px; }
+    button       { padding: 0.5rem 1rem; cursor: pointer; border: none; border-radius: 4px;
+                   background: #3578e5; color: #fff; font-size: 0.9rem; }
+    button:hover { background: #2a60c0; }
+    #notes-list  { list-style: none; padding: 0; margin-top: 0.5rem; }
+    #notes-list li   { background: #f8f8f8; margin: 0.5rem 0; padding: 0.75rem 1rem;
+                       border-radius: 4px; border-left: 3px solid #3578e5;
+                       display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+    .note-body   { flex: 1; }
+    .note-meta   { font-size: 0.75rem; color: #888; margin-top: 0.25rem; }
+    .delete-btn  { background: #dc3545; padding: 0.25rem 0.6rem; font-size: 0.8rem; flex-shrink: 0; }
+    .delete-btn:hover { background: #b02a37; }
+    #error       { color: #dc3545; min-height: 1.2rem; }
+    #status      { color: #198754; min-height: 1.2rem; }
+    hr           { border: none; border-top: 1px solid #ddd; margin: 1.25rem 0; }
+    .warning     { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;
+                   padding: 0.5rem 0.75rem; font-size: 0.82rem; margin-bottom: 1rem; }
+  </style>
+
+</head>
+<body>
+
+  <h1>Personal Notes <span class="phase-badge">Phase 1 — No Auth</span></h1>
+
+  <div class="warning">
+    <strong>Phase 1 (insecure):</strong> Identity is based on a plain text field.
+    Any user can impersonate another by typing their username.
+    This will be replaced by Keycloak login in Phase 4.
+  </div>
+
+  <section id="identity-section">
+    <label for="username-input">Your username (simulated — no auth)</label>
+    <input id="username-input" type="text" placeholder="e.g. alice" value="alice" />
+    <button onclick="loadNotes()">Load my notes</button>
+
+    <label style="margin-top:0.75rem;">
+      <input id="admin-toggle" type="checkbox" style="width:auto;margin-right:4px;" />
+      Admin view — show all users' notes
+
+    </label>
+  </section>
+
+  <hr />
+
+  <section>
+    <h2 style="font-size:1.1rem;">New note</h2>
+    <label for="note-content">Content</label>
+    <textarea id="note-content" rows="3" placeholder="Write your note here..."></textarea>
+    <button onclick="createNote()">Save note</button>
+  </section>
+
+  <p id="error"></p>
+  <p id="status"></p>
+
+  <h2 style="font-size:1.1rem;">Notes</h2>
+  <ul id="notes-list"></ul>
+
+  <script>
+
+    const API_BASE = '/api/notes';
+
+    function getCurrentUser() {
+      return document.getElementById('username-input').value.trim() || 'anonymous';
+    }
+
+    function buildHeaders(includeContentType = false) {
+      const headers = { 'X-User': getCurrentUser() };
+      if (includeContentType) headers['Content-Type'] = 'application/json';
+      return headers;
+    }
+
+    function showError(msg)  {
+      document.getElementById('error').textContent  = msg;
+      document.getElementById('status').textContent = '';
+    }
+    function showStatus(msg) {
+      document.getElementById('status').textContent = msg;
+      document.getElementById('error').textContent  = '';
+    }
+
+    async function loadNotes() {
+      showStatus('Loading...');
+
+      const admin = document.getElementById('admin-toggle').checked;
+      const url   = admin ? `${API_BASE}?admin=true` : API_BASE;
+
+      try {
+        const res = await fetch(url, { headers: buildHeaders() });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const notes = await res.json();
+        renderNotes(notes);
+        showStatus(`Loaded ${notes.length} note(s).`);
+      } catch (err) {
+        showError(`Failed to load notes: ${err.message}`);
+      }
+    }
+
+    async function createNote() {
+      const content = document.getElementById('note-content').value.trim();
+      if (!content) { showError('Note content cannot be empty.'); return; }
+
+      try {
+        const res = await fetch(API_BASE, {
+          method:  'POST',
+          headers: buildHeaders(true),
+          body:    JSON.stringify({ content }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        document.getElementById('note-content').value = '';
+        showStatus('Note saved.');
+        await loadNotes();
+      } catch (err) {
+        showError(`Failed to create note: ${err.message}`);
+      }
+    }
+
+    async function deleteNote(id) {
+      try {
+        const res = await fetch(`${API_BASE}/${id}`, {
+          method:  'DELETE',
+          headers: buildHeaders(),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        showStatus('Note deleted.');
+        await loadNotes();
+      } catch (err) {
+        showError(`Failed to delete note: ${err.message}`);
+      }
+    }
+
+    function renderNotes(notes) {
+      const list = document.getElementById('notes-list');
+      list.innerHTML = '';
+
+      if (notes.length === 0) {
+        list.innerHTML = '<li style="color:#888;">No notes yet.</li>';
+        return;
+      }
+
+      notes.forEach(note => {
+        const li = document.createElement('li');
+
+        const body = document.createElement('div');
+        body.className = 'note-body';
+
+        const text = document.createElement('div');
+        text.textContent = note.content;
+
+        const meta = document.createElement('div');
+        meta.className   = 'note-meta';
+
+        meta.textContent = `by ${note.username} · ${new Date(note.createdAt).toLocaleString()}`;
+
+        body.appendChild(text);
+        body.appendChild(meta);
+
+        const del = document.createElement('button');
+        del.className   = 'delete-btn';
+        del.textContent = 'Delete';
+        del.onclick     = () => deleteNote(note.id);
+
+        li.appendChild(body);
+        li.appendChild(del);
+        list.appendChild(li);
+      });
+    }
+
+    loadNotes();
+  </script>
+</body>
+</html>
