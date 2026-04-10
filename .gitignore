@@ -1,0 +1,28 @@
+# Compiled output
+target/
+
+# Maven wrapper cache (downloaded Maven binaries — regenerated automatically)
+.mvn/wrapper/dists/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.classpath
+*.project
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment / secrets
+.env
+*.env.local
+
+# Spring Boot
+spring-shell.log
