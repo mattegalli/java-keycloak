@@ -4,21 +4,24 @@ import com.example.notes.model.Note;
 import com.example.notes.service.NoteService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * REST API for the Personal Notes app.
  *
  * Endpoints:
- *   GET    /api/notes         — list notes for the calling user
- *   GET    /api/notes?admin=true — list ALL notes (admin only)
- *   POST   /api/notes         — create a note
- *   DELETE /api/notes/{id}    — delete a note
- *
+ *   GET    /api/notes              — list the caller's notes
+ *   GET    /api/notes/all          — list ALL notes (admin role required)
+ *   POST   /api/notes              — create a note
+ *   DELETE /api/notes/{id}         — delete own note (or any note if admin)
  */
 @RestController
 @RequestMapping("/api/notes")
@@ -33,30 +36,35 @@ public class NoteController {
     // -------------------------------------------------------------------------
     // GET /api/notes
     //
-    // Returns the calling user's notes.
-    // If ?admin=true is passed, returns ALL notes from all users.
-    //
+    // Returns only the notes belonging to the authenticated user.
+    // @AuthenticationPrincipal Jwt injects the parsed, verified token object.
+    // -------------------------------------------------------------------------
     @GetMapping
-    public ResponseEntity<Collection<Note>> getNotes(
-            @RequestHeader(value = "X-User", defaultValue = "anonymous") String username,
-            @RequestParam(value = "admin", defaultValue = "false") boolean admin) {
+    public ResponseEntity<List<Note>> getMyNotes(@AuthenticationPrincipal Jwt jwt) {
+        String username = jwt.getClaimAsString("preferred_username");
+        return ResponseEntity.ok(noteService.getNotesForUser(username));
+    }
 
-        if (admin) {
-            return ResponseEntity.ok(noteService.getAllNotes());
-        }
-        List<Note> notes = noteService.getNotesForUser(username);
-        return ResponseEntity.ok(notes);
+    // -------------------------------------------------------------------------
+    // GET /api/notes/all
+    //
+    // Returns every note from all users.
+    // Spring returns 403 Forbidden automatically if the role is absent.
+    // -------------------------------------------------------------------------
+    @GetMapping("/all")
+    @PreAuthorize("hasRole('admin')")
+    public ResponseEntity<Collection<Note>> getAllNotes() {
+        return ResponseEntity.ok(noteService.getAllNotes());
     }
 
     // -------------------------------------------------------------------------
     // POST /api/notes
     //
-    // Request body: { "content": "..." }
-    // Creates a note owned by the calling user.
+    // Creates a note owned by the authenticated user.
     // -------------------------------------------------------------------------
     @PostMapping
     public ResponseEntity<Note> createNote(
-            @RequestHeader(value = "X-User", defaultValue = "anonymous") String username,
+            @AuthenticationPrincipal Jwt jwt,
             @RequestBody Map<String, String> body) {
 
         String content = body.get("content");
@@ -64,6 +72,7 @@ public class NoteController {
             return ResponseEntity.badRequest().build();
         }
 
+        String username = jwt.getClaimAsString("preferred_username");
         Note created = noteService.createNote(username, content);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
@@ -73,15 +82,44 @@ public class NoteController {
     //
     // Deletes the note with the given ID.
     //
+    // hasRole('admin') checks for ROLE_admin in the SecurityContext authorities,
+    // which were mapped from realm_access.roles in SecurityConfig.
     // -------------------------------------------------------------------------
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteNote(
-            @RequestHeader(value = "X-User", defaultValue = "anonymous") String username,
+            @AuthenticationPrincipal Jwt jwt,
             @PathVariable String id) {
 
-        boolean deleted = noteService.deleteNote(id);
-        return deleted
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.notFound().build();
+        Optional<Note> note = noteService.findById(id);
+        if (note.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        String username  = jwt.getClaimAsString("preferred_username");
+        boolean isOwner  = note.get().getUsername().equals(username);
+        boolean isAdmin  = jwt.getClaimAsMap("realm_access") != null
+                && jwt.getClaimAsStringList("realm_access") == null
+                && hasAdminRole(jwt);
+
+        if (!isOwner && !isAdmin) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        noteService.deleteNote(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Extracts the realm roles list from the JWT and checks for "admin".
+     */
+    @SuppressWarnings("unchecked")
+    private boolean hasAdminRole(Jwt jwt) {
+        Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
+        if (realmAccess == null) return false;
+        Object roles = realmAccess.get("roles");
+        if (roles instanceof List<?> roleList) {
+            return roleList.contains("admin");
+        }
+        return false;
     }
 }
