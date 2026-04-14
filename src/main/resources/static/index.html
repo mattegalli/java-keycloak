@@ -5,79 +5,142 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Personal Notes</title>
   <style>
-    body         { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #222; }
-    h1           { font-size: 1.5rem; margin-bottom: 0.25rem; }
-    .phase-badge { display: inline-block; background: #f0ad4e; color: #fff; font-size: 0.7rem;
+    body        { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    h1          { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    .phase-badge { display: inline-block; background: #198754; color: #fff; font-size: 0.7rem;
                    padding: 2px 8px; border-radius: 3px; vertical-align: middle; margin-left: 8px; }
-    label        { display: block; margin-bottom: 0.25rem; font-weight: 500; font-size: 0.9rem; }
-    input, textarea { width: 100%; box-sizing: border-box; padding: 0.5rem;
-                      margin-bottom: 0.5rem; border: 1px solid #ccc; border-radius: 4px; }
-    button       { padding: 0.5rem 1rem; cursor: pointer; border: none; border-radius: 4px;
-                   background: #3578e5; color: #fff; font-size: 0.9rem; }
+    label       { display: block; margin-bottom: 0.25rem; font-weight: 500; font-size: 0.9rem; }
+    textarea    { width: 100%; box-sizing: border-box; padding: 0.5rem;
+                  margin-bottom: 0.5rem; border: 1px solid #ccc; border-radius: 4px; }
+    button      { padding: 0.5rem 1rem; cursor: pointer; border: none; border-radius: 4px;
+                  background: #3578e5; color: #fff; font-size: 0.9rem; }
     button:hover { background: #2a60c0; }
-    #notes-list  { list-style: none; padding: 0; margin-top: 0.5rem; }
-    #notes-list li   { background: #f8f8f8; margin: 0.5rem 0; padding: 0.75rem 1rem;
-                       border-radius: 4px; border-left: 3px solid #3578e5;
-                       display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
-    .note-body   { flex: 1; }
-    .note-meta   { font-size: 0.75rem; color: #888; margin-top: 0.25rem; }
-    .delete-btn  { background: #dc3545; padding: 0.25rem 0.6rem; font-size: 0.8rem; flex-shrink: 0; }
+    #notes-list { list-style: none; padding: 0; margin-top: 0.5rem; }
+    #notes-list li  { background: #f8f8f8; margin: 0.5rem 0; padding: 0.75rem 1rem;
+                      border-radius: 4px; border-left: 3px solid #3578e5;
+                      display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+    .note-body  { flex: 1; }
+    .note-meta  { font-size: 0.75rem; color: #888; margin-top: 0.25rem; }
+    .delete-btn { background: #dc3545; padding: 0.25rem 0.6rem; font-size: 0.8rem; flex-shrink: 0; border: none;
+                  border-radius: 4px; cursor: pointer; color: #fff; }
     .delete-btn:hover { background: #b02a37; }
-    #error       { color: #dc3545; min-height: 1.2rem; }
-    #status      { color: #198754; min-height: 1.2rem; }
-    hr           { border: none; border-top: 1px solid #ddd; margin: 1.25rem 0; }
-    .warning     { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;
-                   padding: 0.5rem 0.75rem; font-size: 0.82rem; margin-bottom: 1rem; }
+    #error      { color: #dc3545; min-height: 1.2rem; }
+    #status     { color: #198754; min-height: 1.2rem; }
+    hr          { border: none; border-top: 1px solid #ddd; margin: 1.25rem 0; }
+
+    /* User info bar at the top */
+    #user-bar   { display: flex; justify-content: space-between; align-items: center;
+                  background: #f0f4ff; border: 1px solid #d0daff; border-radius: 6px;
+                  padding: 0.5rem 0.75rem; margin-bottom: 1rem; font-size: 0.9rem; }
+    #user-bar span { font-weight: 600; }
+    #logout-btn { background: #6c757d; padding: 0.3rem 0.7rem; font-size: 0.82rem; }
+    #logout-btn:hover { background: #565e64; }
+
+    /* Admin panel */
+    #admin-panel { background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px;
+                   padding: 0.6rem 0.75rem; margin-bottom: 1rem; font-size: 0.88rem; }
+    #admin-panel button { background: #f0ad4e; font-size: 0.82rem; padding: 0.3rem 0.7rem; }
+    #admin-panel button:hover { background: #d9933e; }
+
+    #loading    { color: #888; font-style: italic; }
   </style>
 
+  <script src="http://localhost:8180/js/keycloak.js"></script>
 </head>
 <body>
 
-  <h1>Personal Notes <span class="phase-badge">Phase 1 — No Auth</span></h1>
+  <p id="loading">Connecting to Keycloak...</p>
 
-  <div class="warning">
-    <strong>Phase 1 (insecure):</strong> Identity is based on a plain text field.
-    Any user can impersonate another by typing their username.
-    This will be replaced by Keycloak login in Phase 4.
+  <!-- Everything below is hidden until keycloak.init() resolves -->
+  <div id="app" style="display:none;">
+
+    <h1>Personal Notes <span class="phase-badge">Keycloak Login</span></h1>
+
+    <div id="user-bar">
+      <span>Logged in as: <span id="username-display"></span></span>
+      <button id="logout-btn" onclick="logout()">Logout</button>
+    </div>
+
+    <div id="admin-panel" style="display:none;">
+      <strong>Admin panel</strong> — you have the <code>admin</code> realm role.
+      <button onclick="loadAllNotes()" style="margin-left:0.5rem;">View all users' notes</button>
+    </div>
+
+    <hr />
+
+    <section>
+      <h2 style="font-size:1.1rem;">New note</h2>
+      <label for="note-content">Content</label>
+      <textarea id="note-content" rows="3" placeholder="Write your note here..."></textarea>
+      <button onclick="createNote()">Save note</button>
+    </section>
+
+    <p id="error"></p>
+    <p id="status"></p>
+
+    <h2 style="font-size:1.1rem;">My notes</h2>
+    <ul id="notes-list"></ul>
+
   </div>
 
-  <section id="identity-section">
-    <label for="username-input">Your username (simulated — no auth)</label>
-    <input id="username-input" type="text" placeholder="e.g. alice" value="alice" />
-    <button onclick="loadNotes()">Load my notes</button>
-
-    <label style="margin-top:0.75rem;">
-      <input id="admin-toggle" type="checkbox" style="width:auto;margin-right:4px;" />
-      Admin view — show all users' notes
-
-    </label>
-  </section>
-
-  <hr />
-
-  <section>
-    <h2 style="font-size:1.1rem;">New note</h2>
-    <label for="note-content">Content</label>
-    <textarea id="note-content" rows="3" placeholder="Write your note here..."></textarea>
-    <button onclick="createNote()">Save note</button>
-  </section>
-
-  <p id="error"></p>
-  <p id="status"></p>
-
-  <h2 style="font-size:1.1rem;">Notes</h2>
-  <ul id="notes-list"></ul>
-
   <script>
+    // The Keycloak() object is provided by the keycloak.js
+    // It points at the right realm and the public frontend client.
+    const keycloak = new Keycloak({
+      url:      'http://localhost:8180',
+      realm:    'notes-realm',
+      clientId: 'notes-frontend'
+    });
 
     const API_BASE = '/api/notes';
 
-    function getCurrentUser() {
-      return document.getElementById('username-input').value.trim() || 'anonymous';
-    }
+    // --------------------------------------------------------------------------
+    // Initialise Keycloak, no anonymous access.
+    // The browser generates a random code_verifier, hashes it (S256 = SHA-256) into a code_challenge
+    // Keycloak verifies the hash matches, this prevents auth code interception attacks
+    // --------------------------------------------------------------------------
+    keycloak.init({ onLoad: 'login-required', pkceMethod: 'S256' })
+      .then(authenticated => {
+        if (!authenticated) {
+          // Should not happen with onLoad: 'login-required', but handle it anyway
+          document.getElementById('loading').textContent = 'Authentication failed.';
+          return;
+        }
 
-    function buildHeaders(includeContentType = false) {
-      const headers = { 'X-User': getCurrentUser() };
+        // Hide loading message, show the app
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('app').style.display     = 'block';
+
+        // Show the logged-in username from the JWT's preferred_username claim
+        document.getElementById('username-display').textContent =
+          keycloak.tokenParsed.preferred_username; 
+
+        // Show admin panel if the user has the 'admin' realm role
+        if (keycloak.hasRealmRole('admin')) {
+          document.getElementById('admin-panel').style.display = 'block';
+        }
+
+        // Load the user's notes
+        loadNotes();
+
+        // Just for exercise, set up automatic token refresh.
+        // Every 60 seconds, check if the token expires in less than 30 seconds.
+        // If so, silently refresh it using the refresh_token
+        setInterval(() => {
+          keycloak.updateToken(30).catch(() => {
+            console.warn('Session expired. Redirecting to login.');
+            keycloak.login();
+          });
+        }, 60_000);
+      }).catch(() => {
+        document.getElementById('loading').textContent = 'Could not connect to Keycloak. Is it running on http://localhost:8180?';
+      });
+
+    // Just for exercise, before every API call we call keycloak.updateToken(10)
+    // to refresh if expiring in less than 10 seconds and refresh in case.
+    async function buildHeaders(includeContentType = false) {
+      await keycloak.updateToken(10);
+      const headers = { 'Authorization': 'Bearer ' + keycloak.token };
       if (includeContentType) headers['Content-Type'] = 'application/json';
       return headers;
     }
@@ -93,19 +156,28 @@
 
     async function loadNotes() {
       showStatus('Loading...');
-
-      const admin = document.getElementById('admin-toggle').checked;
-      const url   = admin ? `${API_BASE}?admin=true` : API_BASE;
-
       try {
-        const res = await fetch(url, { headers: buildHeaders() });
+        const res = await fetch(API_BASE, { headers: await buildHeaders() });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
         const notes = await res.json();
         renderNotes(notes);
         showStatus(`Loaded ${notes.length} note(s).`);
       } catch (err) {
         showError(`Failed to load notes: ${err.message}`);
+      }
+    }
+
+    async function loadAllNotes() {
+      showStatus('Loading all notes (admin view)...');
+      try {
+        const res = await fetch(`${API_BASE}/all`, { headers: await buildHeaders() });
+        if (res.status === 403) throw new Error('403 — you do not have the admin role.');
+        if (!res.ok)            throw new Error(`HTTP ${res.status}`);
+        const notes = await res.json();
+        renderNotes(notes);
+        showStatus(`Admin view: ${notes.length} total note(s).`);
+      } catch (err) {
+        showError(`Failed to load all notes: ${err.message}`);
       }
     }
 
@@ -116,7 +188,7 @@
       try {
         const res = await fetch(API_BASE, {
           method:  'POST',
-          headers: buildHeaders(true),
+          headers: await buildHeaders(true),
           body:    JSON.stringify({ content }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -133,15 +205,20 @@
       try {
         const res = await fetch(`${API_BASE}/${id}`, {
           method:  'DELETE',
-          headers: buildHeaders(),
+          headers: await buildHeaders(),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (res.status === 403) throw new Error('403 — you can only delete your own notes.');
+        if (!res.ok)            throw new Error(`HTTP ${res.status}`);
 
         showStatus('Note deleted.');
         await loadNotes();
       } catch (err) {
         showError(`Failed to delete note: ${err.message}`);
       }
+    }
+
+    function logout() {
+      keycloak.logout({ redirectUri: 'http://localhost:8080' });
     }
 
     function renderNotes(notes) {
@@ -154,8 +231,7 @@
       }
 
       notes.forEach(note => {
-        const li = document.createElement('li');
-
+        const li   = document.createElement('li');
         const body = document.createElement('div');
         body.className = 'note-body';
 
@@ -164,13 +240,12 @@
 
         const meta = document.createElement('div');
         meta.className   = 'note-meta';
-
         meta.textContent = `by ${note.username} · ${new Date(note.createdAt).toLocaleString()}`;
 
         body.appendChild(text);
         body.appendChild(meta);
 
-        const del = document.createElement('button');
+        const del       = document.createElement('button');
         del.className   = 'delete-btn';
         del.textContent = 'Delete';
         del.onclick     = () => deleteNote(note.id);
@@ -180,8 +255,6 @@
         list.appendChild(li);
       });
     }
-
-    loadNotes();
   </script>
 </body>
 </html>
