@@ -1,21 +1,25 @@
 services:
-
   keycloak:
     image: quay.io/keycloak/keycloak:25.0.6
     container_name: keycloak
     command:
-      - start-dev                          # development mode: no TLS, embedded H2 DB
-      - --import-realm                     # auto-import any realm JSON found in /opt/keycloak/data/import
+      - start-dev # development mode: no TLS, embedded H2 DB
+      - --import-realm # auto-import any realm JSON found in /opt/keycloak/data/import
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_HTTP_PORT: 8080
     ports:
-      - "8180:8080"                        # host:container — avoids clash with Spring Boot on 8080
+      - "8180:8080" # host:container — avoids clash with Spring Boot on 8080
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+      # SPI JARs — Keycloak scans this directory at startup and loads any JARs it finds.
+      # Build: "cd keycloak-extensions && ../mvnw package -DskipTests"
+      # Copy: "cp keycloak-extensions/target/keycloak-extensions-*.jar keycloak/providers/"
+      - ./keycloak/providers:/opt/keycloak/providers
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/ready || exit 1"]
+      test:
+        ["CMD-SHELL", "curl -sf http://localhost:8080/health/ready || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
